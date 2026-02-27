@@ -1,0 +1,113 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.svm import SVR
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import (
+    mean_absolute_error, mean_squared_error, r2_score,
+    accuracy_score, classification_report, confusion_matrix
+)
+from textblob import TextBlob
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+
+# -----------------------------
+# Step 1: Sample Data
+# -----------------------------
+df = pd.read_csv("/content/imdb_top_1000.csv", engine='python', on_bad_lines='skip')
+
+# -----------------------------
+# Step 2: Feature Engineering
+# -----------------------------
+df["Sentiment"] = df["Overview"].apply(lambda x: TextBlob(str(x)).sentiment.polarity)
+features = ["No_of_Votes", "Sentiment"]
+target = "IMDB_Rating"
+df.dropna(subset=[target], inplace=True)
+X = df[features]
+y = df[target]
+
+# -----------------------------
+# Step 3: Scaling & Split
+# -----------------------------
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=0.2, random_state=42
+)
+
+# -----------------------------
+# Step 4: Revanth's SVR Model
+# -----------------------------
+class RevanthSVRModel:
+    def __init__(self, kernel='rbf', C=1.0, epsilon=0.1):
+        self.model = SVR(kernel=kernel, C=C, epsilon=epsilon)
+
+    def fit(self, X, y):
+        self.model.fit(X, y)
+
+    def predict(self, X):
+        preds = self.model.predict(X)
+        return np.clip(preds, 0, 10)
+
+# -----------------------------
+# Step 5: Train and Predict
+# -----------------------------
+rev_svr_model = RevanthSVRModel()
+rev_svr_model.fit(X_train, y_train)
+y_pred_svr = rev_svr_model.predict(X_test)
+
+# -----------------------------
+# Step 6: Regression Evaluation
+# -----------------------------
+print("\n🔹 Regression Metrics (RevanthSVR):")
+print("Mean Absolute Error:", mean_absolute_error(y_test, y_pred_svr))
+print("Mean Squared Error:", mean_squared_error(y_test, y_pred_svr))
+print("R2 Score:", r2_score(y_test, y_pred_svr))
+
+# -----------------------------
+# Step 7: Classification Evaluation
+# -----------------------------
+def categorize_rating(r):
+    if r >= 8.0:
+        return "Hit"
+    elif r >= 7.0:
+        return "Average"
+    else:
+        return "Flop"
+
+y_test_class = y_test.apply(categorize_rating)
+y_pred_class = pd.Series(y_pred_svr).apply(categorize_rating)
+
+print("\n🔹 Classification Metrics (RevanthSVR):")
+print("Accuracy:", accuracy_score(y_test_class, y_pred_class))
+print("\nClassification Report:\n", classification_report(y_test_class, y_pred_class))
+
+# Confusion Matrix Visualization
+
+cm = confusion_matrix(y_test_class, y_pred_class, labels=["Hit", "Average", "Flop"])
+
+plt.figure(figsize=(6,5))
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
+            xticklabels=["Hit", "Average", "Flop"],
+            yticklabels=["Hit", "Average", "Flop"])
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("Confusion Matrix")
+plt.show()
+
+# -----------------------------
+# Step 8: Visualization
+# -----------------------------
+plt.figure(figsize=(8, 5))
+plt.plot(range(len(y_test)), y_test.values, label="Actual", marker='o', color='green')
+plt.plot(range(len(y_pred_svr)), y_pred_svr, label="RevanthSVR Predicted", marker='x', linestyle='--', color='red')
+plt.title("Actual vs Predicted Success Score (RevanthSVRModel)")
+plt.xlabel("Test Sample Index")
+plt.ylabel("IMDB Rating / Success Score")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
